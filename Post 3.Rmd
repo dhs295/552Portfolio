@@ -1,0 +1,103 @@
+---
+title: "Post 3"
+author: "Devon Brice"
+date: "December 9, 2018"
+output: html_document
+---
+
+**In my final Post, I will explore a data set from the UCI Machine Learning Repository about Diagnostic Breast Cancer. Features in this data set are computed from a digitized image of a breast mass. They describe characteristics of 3 cell nuclei present in the image which is why each feature has a 1, 2, or 3 next to it. This data also includes if the tumor is malignant or benign. In this Post, I will use anamoly detection to identify the outliers in the dataset.**
+
+
+```{r}
+#load in necessary packages
+library(randomForest)
+library(outliers)
+
+#Read in data and format column names
+cancer <- read.delim("breastcancer.txt", sep=",", header = FALSE)
+
+colnames(cancer) <- c("ID", "Diagnosis", "radius1", "texture1", "perimeter1", "area1", "smoothness1", "compactness1", "concavity1", "concave_points1", "symmetry1", "fractal_dimension1", "radius2", "texture2", "perimeter2", "area2", "smoothness2", "compactness2", "concavity2", "concave_points2", "symmetry2", "fractal_dimension2","radius3", "texture3", "perimeter3", "area3", "smoothness3", "compactness3", "concavity3", "concave_points3", "symmetry3", "fractal_dimension3")
+
+
+#Setting Malignant as 1 and Benign as 0
+cancer$Diagnosis <- ifelse(cancer$Diagnosis=="M",1,0)
+
+```
+
+
+#Anamoly Detection
+```{r}
+
+#Ran this code to look at the densities for all variables in cancer data set. 
+#for(i in 1:ncol(cancer)){
+#  plot(density(cancer[,i]))}
+
+#Chose variables with skews to further analyze outliers
+attach(cancer)
+par(mfrow=c(4,4))
+for(i in c(6,7,8,13,14:19,22,25,26)){
+  plot(density(cancer[,i]))}
+
+cancer.ad <- cancer[,c(1,6,7,8,13,14:19,22,25,26)]
+
+```
+
+**Now that I have identified the features of this dataset that have a skew, I created a separate dataset that includes just these columns from 'cancer'. I will look specifically into these variables to detect anomolies and analyze Grubb's test statistics. **
+
+
+```{r}
+#loop through
+pval <- c()
+alt <-c()
+for(i in 2:ncol(cancer.ad)){
+  grubbs.result <- grubbs.test(cancer.ad[,i])
+  pval[i]<- grubbs.result$p.value
+  alt[i]<- grubbs.result$alternative
+}
+data.frame(pval, alt)
+
+
+```
+
+**The p-value in this data frame shows that the Grubb's result for all 14 variables are significant. The Grubb's alternative shows the highest value for each variable, which in this case, are all outliers. Now, I will run a function within a for loop that will identify all outliers at once, thus giving me tha capability to remove these outliers from the cancer data set. **
+
+
+```{r}
+
+# Applying the grubb's test repeatedly until not finding outliers
+grubbs.flag <- function(x) {
+    EPS <- 10^(-6)
+    outliers <- rep(FALSE, length(x))
+    test <- x
+    grubbs.result <- grubbs.test(test)
+    pv <- grubbs.result$p.value
+    while(pv < 0.05) {
+        out_num <- as.numeric(strsplit(grubbs.result$alternative," ")[[1]][3])
+        outliers[abs(x-out_num)<EPS] <- TRUE
+        test <- x[!outliers]
+        grubbs.result <- grubbs.test(test)
+        pv <- grubbs.result$p.value
+    }
+    return(data.frame(Data=x,Outlier=outliers))
+}
+
+#loop through each column to identify outliers and store in a list
+outliers<-list()
+for(i in 2:ncol(cancer.ad)){
+  outliers[[i]]<-which(grubbs.flag(cancer.ad[,i])$Outlier=="TRUE")
+}
+outliers
+
+#Unlisting and chosing the unique rows to be removed
+toremove<- unique(unlist(outliers))
+
+
+#removing observations that contain 
+cancer<- cancer[-toremove,]
+
+```
+
+**After the anamoly detection, I removed 47 observations that contained outliers in the data set.**
+
+
+

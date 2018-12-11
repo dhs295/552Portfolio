@@ -1,0 +1,115 @@
+---
+title: "Post 2"
+author: "Devon Brice"
+date: "November 19, 2018"
+output: html_document
+---
+
+**In my second Post, I will explore a data set from the UCI Machine Learning Repository about US COngressional voting records. This data set includes votes for each of the U.S. House of Representatives Congressmen on the 16 key votes identified by the CQA. In this Post, I will use association rules to better understand voting patterns and what an individual is likely to vote for given they have voted for another issue in a certain way.**
+
+```{r}
+library(arules)
+library(arulesViz)
+
+#Read in data and create variable names
+voting <- read.delim("votingrecords.txt", sep=",", header = FALSE)
+
+colnames(voting) <- c("Party", "handicapped-infants", "water-project-cost-sharing", "adoption-of-the-budget-resolution", "physician-fee-freeze", "el-salvador-aid", "religious-groups-in-schools", "anti-satellite-test-ban", "aid-to-nicaraguan-contras", "mx-missile", "immigration", "synfuels-corporation-cutback", "education-spending", "superfund-right-to-sue","crime", "duty-free-exports","export-administration-act-south-africa")
+
+
+#Missing Values are signifies as "?", here we are setting those values to NA.
+voting[voting=="?"]<-NA
+
+
+#Removing rows with missing values for association rule analysis
+voting <- na.omit(voting)
+
+
+#Formating factors to numeric. 1 for "y" and 0 for "n"
+for(i in 2:ncol(voting)){
+  levels(voting[,i])[2]<- 0
+  levels(voting[,i])[3]<- 1
+  voting[,i]<- as.numeric(as.character(voting[,i]))
+  }
+
+#convert to matrix
+voting.mat<- as.matrix(voting[,2:17])
+
+```
+
+
+
+
+##Association Rules and Explaination of Measures
+
+**Ordered by support**
+```{r}
+#Rules of length 2
+basket_rules <- apriori(voting.mat, parameter = list(sup = 0.40, conf = 0.5, target="rules", minlen=2, maxlen=2))
+
+#Removing Redundant Rules
+basket_rules <- basket_rules[!is.redundant(basket_rules)]
+
+#Inspecting Top 15 rules sorted by Support
+inspect(sort(basket_rules, by="support", decreasing = TRUE)[1:15])
+
+
+```
+
+**SUPPORT: In this case, the support is the number of individuals that voted yes for both issues in the {LHS} and {RHS} parts of the rule as a percentage over the total number of individuals in the analysis. The support measures how frequently both issues get a "yes" vote from a voter as a percentage of all voters. FOr example, in the first rule with the highest support, out of all the voters, 53.8% of voters voted "yes" to both issues of crime and religious-groups-in-schools. **
+
+
+
+**Ordered by Conficence**
+```{r}
+#Inspecting Top 15 rules sorted by Confidence
+inspect(sort(basket_rules, by="confidence", decreasing = TRUE)[1:15])
+```
+
+
+**CONFIDENCE: In this case, the confidence is the ratio of the number of voters that voted "yes" to issues in {RHS} as well as the number of voters that voted "yes" to issues in {LHS} to the number of voters that voted "yes" to all the issues in {LHS}. FOr example, in the first rule listed above with the highest conficende, we can be 99% confident that if a voter voted "yes" to anti-satellite-test-ban that that voter also voted for export-administration-act-south-africa. **
+
+
+**Ordered by Lift**
+```{r}
+#Inspecting Top 15 rules sorted by Lift
+inspect(sort(basket_rules, by="lift", decreasing = TRUE)[1:15])
+```
+
+**LIFT: In this case, the lift tells us how much our confidence has increased that the issue in the RHS will have a "yes" vote given that the issue in the LHS also had a "yes" vote. The higher the lift, the stronger the association between the two issues. For example, in the first rule with the highest lift, the odds that a voter will vote "yes" to physician-fee-freeze increases by a factor of 1.82 given that the voter voted "yes" to education-spending.**
+
+
+**Frequency Plot**
+```{r}
+itemFrequencyPlot(items(basket_rules),col = "light blue", type = "absolute", horiz = TRUE, xlab = "Vote Frequency (counts)", main = "Frequency of Issue Voted For")
+
+```
+
+**In the rules with a support of at least 40% and a confidence of at least 50%, we see that the issues most commonly voted "yes" for are export-administration-act-south-africa, religious-groups-in-schools and issues of crime. Some issues that had no "yes" votes in these rules were duty-free-exports and synfuels-corporation-cutback. This could mean that voters for these issues had a diverse array of votes on issues where the confidence and support were too low to be picked up in these rules.**
+
+
+
+
+**Association with 3 Rules**
+
+```{r}
+#Rules of length 3
+basket_rules3 <- apriori(voting.mat, parameter = list(sup = 0.40, conf = 0.6, target="rules", minlen=3, maxlen=3))
+
+#Removing Redundant Rules
+basket_rules3 <- basket_rules3[!is.redundant(basket_rules3)]
+
+#Inspecting Top 15 rules sorted by lift
+inspect(sort(basket_rules3, by="lift", decreasing = TRUE)[1:15])
+
+```
+
+**In these assocaition rules, I have set the minimum and maximum length to 3, forcing to rule to have two issues on the LHS and one on the RHS. The interpretation for the first rule goes as follows: **
+
+**SUPPORT: Of all the voters, 41.4% of voters voted "yes" to all three issues of el-salvador-aid, education-spending, and physician-fee-freeze. **
+
+**CONFIDENCE: We can be 93% confident that if a voter voted "yes" to el-salvador-aid AND education-spending that the voter also voted in favor of physician-fee-freeze.**
+
+**LIFT: The odds that a voter will vote "yes" to physician-fee-freeze increases by a factor of 1.91 given that the voter voted "yes" to both el-salvador-aid AND education-spending. **
+
+
